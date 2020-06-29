@@ -19,17 +19,17 @@ out= FeatureExtractor().main(datapath, outpath)
 
 This script does not compute the Dialogue Act Features, because this classifier is not publicly available but can be requested by emailing Giuliano Tortoreto giuliano.tortoreto@unitn.it [1]
 
-*Using Jupyter Notebook/Lab 
+*Using Jupyter Notebook/Lab*
 
 /src/DiscourseFeatureExtraction.ipynb
 
-*Using Python 
+*Using Python*
 
 download /src/DiscourseFeatureExtraction.py into folder
 
 from DiscourseFeatureExtraction import FeatureExtractor 
 
-**Running BERT + CRF + Features 
+**Running BERT + CRF + Features**
 
 
 
