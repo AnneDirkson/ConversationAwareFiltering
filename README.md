@@ -11,6 +11,7 @@ For installing the required packages:
 # Usage 
 
 **Feature Extraction** 
+
 out= FeatureExtractor().main(datapath, outpath)
 
 * datapath is the path to the input data (/data/ExampleData.tsv is the Medical Misinformation Data reformatted correctly).
