@@ -30,6 +30,8 @@ download /src/DiscourseFeatureExtraction.py into folder
 from DiscourseFeatureExtraction import FeatureExtractor 
 
 **Running BERT + CRF + Features**
+
+
 ConvAwareModel().main(self, data, outpath, da_acts = False): 
 
 * data is the loaded pandas DataFrame with data (/data/ExampleDatawithFeat.tsv is the Medical Misinformation Data reformatted correctly after Feature Extraction).
