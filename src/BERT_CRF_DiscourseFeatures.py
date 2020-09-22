@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[6]:
+# In[1]:
 
 
 from sklearn.model_selection import KFold
@@ -28,7 +28,7 @@ import random
 import os
 
 
-# In[71]:
+# In[3]:
 
 
 class ConvAwareModel(): 
@@ -295,7 +295,7 @@ class ConvAwareModel():
         return y_pred
 
         
-    def obtain_probas_nw (self, data, folddict, foldname, basepath, rightid = 'post_id'):
+    def obtain_probas_nw (self, data, folddict, foldname, basepath, rightid = 'post_id', final_test = False):
         ###load the right probas
         probas_dev = np.load(basepath + 'probs_dev_' + foldname + '.npy')
         probas_test = np.load(basepath + 'probs_' + foldname + '.npy')
@@ -313,7 +313,7 @@ class ConvAwareModel():
         train_df0 = data[data[rightid].isin(y)]
         test_df0 = data[data[rightid].isin(z)]
 
-        train_df_nw = pd.concat([train_df0, dev_df0],axis=0)
+#         train_df_nw = pd.concat([train_df0, dev_df0],axis=0)
 
         dev_posts =list(dev_df0.post_id)
         train_posts= list(train_df0.post_id)
@@ -321,27 +321,30 @@ class ConvAwareModel():
 
 #         print(len(dev_posts))
 #         print(len(probas_dev))
-
-        trainlbls = list(train_df_nw.label)
+        devlbls = list(dev_df0.label)
+        trainlbls = list(train_df0.label)
         testlbls = list(test_df0.label)
 
         df_test = pd.DataFrame(probas_test[0])
         df_train = pd.DataFrame(probas_train[0])
         df_dev = pd.DataFrame(probas_dev[0])
 
-        df_train_nw= pd.concat([df_train, df_dev], axis =0)
-
+#         df_train_nw= pd.concat([df_train, df_dev], axis =0)
+        df_dev.columns = ['Predictions0', 'Predictions1']
         df_test.columns = ['Predictions0', 'Predictions1']
-        df_train_nw.columns = ['Predictions0', 'Predictions1']
+        df_train.columns = ['Predictions0', 'Predictions1']
 
-
+        dev_q = list(dev_df0.thread_id)
         train_q = list(train_df0.thread_id)
         test_q = list(test_df0.thread_id)
 
-        df_train_nw = df_train_nw.reset_index(drop= True)
-
-
-        return df_train_nw, df_test, trainlbls, testlbls, train_q, test_q
+#         df_train_nw = df_train_nw.reset_index(drop= True)
+        if final_test == False: 
+    
+            return df_train, df_dev, trainlbls, devlbls, train_q, dev_q
+    #     return train_df, test_df
+        else: 
+            return df_train, df_test, trainlbls, testlbls, train_q, test_q
         
     
     def get_thread_startpoints (self, lst1): ##list is a list of the question ids 
@@ -428,14 +431,16 @@ class ConvAwareModel():
         train_df0 = data[data[rightid].isin(y)]
         test_df0 = data[data[rightid].isin(z)]
 
-        train_df = pd.concat([train_df0, dev_df0], axis =0)
+#         train_df = pd.concat([train_df0, dev_df0], axis =0)
+        dev_df = dev_df0.fillna(999)
         train_df = train_df.fillna(999)
         test_df = test_df0.fillna(999)
 
+        dev_df = dev_df.reset_index(drop = True)
         train_df = train_df.reset_index(drop = True)
         test_df = test_df.reset_index(drop = True)
 
-        return train_df, test_df
+        return dev_df, train_df, test_df
     
     def run_BlendedBERTCRF(self, data, basepath_probas): 
         out = defaultdict(list)
@@ -465,7 +470,7 @@ class ConvAwareModel():
                                     scoring=f1_scorer)
 
 #             print(d.keys())
-            train_df, test_df, trainlbls, testlbls, train_q, test_q = self.obtain_probas_nw(data, d, w, basepath_probas)
+            train_df, test_df, trainlbls, testlbls, train_q, test_q = self.obtain_probas_nw(data, d, w, basepath_probas, final_test)
     #         print(train_df.head())
 
             X_train = train_df
@@ -517,267 +522,294 @@ class ConvAwareModel():
         return out
        
     
-    def run_crf_preset_blended_doublerun(self, data, prevaddlst, addlst, predlbls, crf_params, basepath_probas):  
-        out = defaultdict(list)
+    def run_crf_preset_blended_doublerun(self, data, prevaddlst, addlst, predlbls, crf_params, basepath_probas, p, d,l, final_test = False):  
 
         f1_scorer = make_scorer(metrics.flat_fbeta_score, beta=1,
                             average='weighted', labels=[0,1])
 
-        for p, d, l in zip(crf_params, self.folddicts, ['fold1', 'fold2', 'fold3', 'fold4', 'fold5', 'fold6', 'fold7', 'fold8', 'fold9', 'fold10']):
+        p1 = p['c1']
+        p2 = p['c2']
 
-            p1 = p['c1']
-            p2 = p['c2']
-
-            crf = sklearn_crfsuite.CRF(
-                algorithm='lbfgs',
-                c1 =p1, 
-                c2 = p2,
-                max_iterations=100,
-                all_possible_transitions=True
-            )
+        crf = sklearn_crfsuite.CRF(
+            algorithm='lbfgs',
+            c1 =p1, 
+            c2 = p2,
+            max_iterations=100,
+            all_possible_transitions=True
+        )
 
 
-            train_df, test_df, trainlbls, testlbls, train_q, test_q = self.obtain_probas_nw(data, d, l, basepath_probas)
+        train_df, test_df, trainlbls, testlbls, train_q, test_q = self.obtain_probas_nw(data, d, l, basepath_probas)
 
-            xtra_train_df, xtra_test_df = self.obtain_other_features(data, d)  
+        xtra_dev_df, xtra_train_df, xtra_test_df2 = self.obtain_other_features(data, d)  
+        
+        if final_test == False: 
+            xtra_test_df = xtra_dev_df
+        else: 
+            xtra_test_df = xtra_test_df2 
 
-            labeldistlst = ['prev_post_label', 'RuncountNeg', 'RuncountPos', 'DistanceLbl0', 'DistanceLbl1', 'RelRuncount']
-            prevaddlst2 = [i for i in prevaddlst if i not in labeldistlst]
+        labeldistlst = ['prev_post_label', 'RuncountNeg', 'RuncountPos', 'DistanceLbl0', 'DistanceLbl1', 'RelRuncount']
+        prevaddlst2 = [i for i in prevaddlst if i not in labeldistlst]
 
-            if addlst in labeldistlst: 
-                addlst2 = []
-            else: 
-                addlst2 = addlst
+        if addlst in labeldistlst: 
+            addlst2 = []
+        elif addlst ==  None: 
+            addlst2= []
+        else: 
+            addlst2 = addlst
 
-            combolst = []
-            [combolst.append(i) for i in prevaddlst]
-            combolst.append(addlst)
-
-
-            set1= set(combolst)
-            set2 = set(labeldistlst)
-
-            droplst = [i for i in labeldistlst if i not in combolst]
-
-            X_train1 = train_df
-            for i in prevaddlst2: 
-                X_train1 = pd.concat([X_train1, xtra_train_df[i]], axis=1)
-
-            if addlst2  != []: 
-                X_train1 = pd.concat([X_train1, xtra_train_df[addlst]], axis=1)
-
-            ##now add all the label dist 
-            for i in labeldistlst: 
-                X_train1 = pd.concat([X_train1, xtra_train_df[i]], axis=1)
-
-            ##now drop the unnecessary ones
-            X_train1 = X_train1.drop (labels = droplst, axis=1)
+        combolst = []
+        [combolst.append(i) for i in prevaddlst]
+        combolst.append(addlst)
 
 
-            startp = self.get_thread_startpoints(train_q)
-            y_train = self.reformat_labels_blend(trainlbls, startp)
+        set1= set(combolst)
+        set2 = set(labeldistlst)
 
-            #reformat X_train
-            X_train_nw = self.reformat_for_crf(X_train1, startp)    
+        droplst = [i for i in labeldistlst if i not in combolst]
 
-            crf.fit(X_train_nw, y_train)
+        X_train1 = train_df
+        for i in prevaddlst2: 
+            X_train1 = pd.concat([X_train1, xtra_train_df[i]], axis=1)
 
-            ##testing phase
-            X_test2 = test_df
+        if addlst2  != []: 
+            X_train1 = pd.concat([X_train1, xtra_train_df[addlst]], axis=1)
 
-            for i in prevaddlst2: 
-                X_test2 = pd.concat([X_test2, xtra_test_df[i]], axis=1)
-    #             print(X_test2.columns)
+        ##now add all the label dist 
+        for i in labeldistlst: 
+            X_train1 = pd.concat([X_train1, xtra_train_df[i]], axis=1)
 
-            if addlst2  != []: 
-                X_test2 = pd.concat([X_test2, xtra_test_df[addlst]], axis=1)
-
-
-            startp = self.get_thread_startpoints(test_q)
-            y_test = self.reformat_labels_blend(testlbls, startp)
+        ##now drop the unnecessary ones
+        X_train1 = X_train1.drop (labels = droplst, axis=1)
 
 
-            ##first run 
+        startp = self.get_thread_startpoints(train_q)
+        y_train = self.reformat_labels_blend(trainlbls, startp)
 
-            X_test_nw = self.reformat_for_crf(X_test2, startp)
+        #reformat X_train
+        X_train_nw = self.reformat_for_crf(X_train1, startp)    
 
+        crf.fit(X_train_nw, y_train)
 
-            ## make dummy versions of all necessary
+        ##testing phase
+        X_test2 = test_df
 
-            if len(set1.intersection(set2)) > 0 : 
-                X_test_nwer = []
-                for t in X_test_nw: 
-                    temp = [] ##temporary thread
-                    for num, p in enumerate(t): ##p is a dictionary for the post
-                        nwp = p
-                        if 'prev_post_label' in combolst: 
-                            nwp['prev_post_label'] = 0 
-                        if 'RuncountNeg' in combolst:
-                            nwp['RuncountNeg'] = num
-                        if 'RuncountPos' in combolst:
-                            nwp['RuncountPos'] = 0
+        for i in prevaddlst2: 
+            X_test2 = pd.concat([X_test2, xtra_test_df[i]], axis=1)
+#             print(X_test2.columns)
 
-                        if 'DistanceLbl0' in combolst:
-                            nwp['DistanceLbl0'] = 0
-                        if 'DistLbl1' in combolst:
-                            nwp['DistLbl1'] = 999 ##same as infinite - there have been none
-                        if 'RelRuncount' in combolst:
-                            nwp['RelRuncount'] = 0
-
-                        temp.append(nwp)
-                    X_test_nwer.append(temp)
-            else: 
-                X_test_nwer = X_test_nw
-
-            ##first prediction round (or last if no label dist values.)
-            y_pred_first = crf.predict(X_test_nwer)
-
-           ##second prediction if necessary 
-
-            if len(set1.intersection(set2)) > 0 : 
-                X_test_nwest = [] ## for all threads
-                for a,b in zip(X_test_nwer, y_pred_first): ##these are threads
-                    ##initialize
-
-                    temp = [] ##for one thread
-
-                    ds = 0
-                    c0 = 0
-                    c1 = 0
-                    d0 = 999
-                    d1 = 999
-                    rel_c = 0
-                    for p, l in zip (a,b): #these are the individual posts - l is predlbl
-                        nwp = p
-                        ##update dictionary
-                        if 'prev_post_label' in combolst: 
-                            nwp['prev_post_label'] = l
-                        if 'RuncountNeg' in combolst:
-                            nwp['RuncountNeg'] = c0
-                        if 'RuncountPos' in combolst:
-                            nwp['RuncountPos'] = c1
-
-                        if 'DistanceLbl0' in combolst:
-                            nwp['DistanceLbl0'] = d0
-                        if 'DistLbl1' in combolst:
-                            nwp['DistLbl1'] = d1 ##same as infinite - there have been none
-                        if 'RelRuncount' in combolst:
-                            nwp['RelRuncount'] = rel_c
-
-                        temp.append(nwp)
-
-                        ##update values for next one
-                        prevlbl = l
-                        if prevlbl == 0: 
-                            c0 += 1
-                            d0 = 0
-                            if d1 == 999: 
-                                d1 = 999
-                            else: 
-                                d1 +=1
-                        elif prevlbl ==1: 
-                            c1 += 1
-                            d1 = 0
-                            if d0 == 999: 
-                                d0 = 999
-                            else: 
-                                d0 += 1
-                        ds = ds +1
-
-                        if c1 == 0: 
-                            rel_c= 0
-                        else:
-                            rel_c = (c1/ds)
-                    ##thread is done - add to new Xtest
-                    X_test_nwest.append(temp)
+        if addlst2  != []: 
+            X_test2 = pd.concat([X_test2, xtra_test_df[addlst]], axis=1)
 
 
-
-                y_pred_nw = crf.predict(X_test_nwest)
-                y_pred_exp = [int(i) for j in y_pred_nw for i in j]
-
-            else: 
-                y_pred_exp = [int(i) for j in y_pred_first for i in j]
+        startp = self.get_thread_startpoints(test_q)
+        y_test = self.reformat_labels_blend(testlbls, startp)
 
 
-            y_test_exp= [int(i) for j in y_test for i in j]
+        ##first run 
 
-            f1_out = f1_score (y_true = y_test_exp, y_pred = y_pred_exp)         
-            recall_out = recall_score(y_true = y_test_exp, y_pred = y_pred_exp)
-            prec_out = precision_score (y_true = y_test_exp, y_pred = y_pred_exp)
+        X_test_nw = self.reformat_for_crf(X_test2, startp)
+
+
+        ## make dummy versions of all necessary
+
+        if len(set1.intersection(set2)) > 0 : 
+            X_test_nwer = []
+            for t in X_test_nw: 
+                temp = [] ##temporary thread
+                for num, p in enumerate(t): ##p is a dictionary for the post
+                    nwp = p
+                    if 'prev_post_label' in combolst: 
+                        nwp['prev_post_label'] = 0 
+                    if 'RuncountNeg' in combolst:
+                        nwp['RuncountNeg'] = num
+                    if 'RuncountPos' in combolst:
+                        nwp['RuncountPos'] = 0
+
+                    if 'DistanceLbl0' in combolst:
+                        nwp['DistanceLbl0'] = 0
+                    if 'DistLbl1' in combolst:
+                        nwp['DistLbl1'] = 999 ##same as infinite - there have been none
+                    if 'RelRuncount' in combolst:
+                        nwp['RelRuncount'] = 0
+
+                    temp.append(nwp)
+                X_test_nwer.append(temp)
+        else: 
+            X_test_nwer = X_test_nw
+
+        ##first prediction round (or last if no label dist values.)
+        y_pred_first = crf.predict(X_test_nwer)
+
+       ##second prediction if necessary 
+
+        if len(set1.intersection(set2)) > 0 : 
+            X_test_nwest = [] ## for all threads
+            for a,b in zip(X_test_nwer, y_pred_first): ##these are threads
+                ##initialize
+
+                temp = [] ##for one thread
+
+                ds = 0
+                c0 = 0
+                c1 = 0
+                d0 = 999
+                d1 = 999
+                rel_c = 0
+                for p, l in zip (a,b): #these are the individual posts - l is predlbl
+                    nwp = p
+                    ##update dictionary
+                    if 'prev_post_label' in combolst: 
+                        nwp['prev_post_label'] = l
+                    if 'RuncountNeg' in combolst:
+                        nwp['RuncountNeg'] = c0
+                    if 'RuncountPos' in combolst:
+                        nwp['RuncountPos'] = c1
+
+                    if 'DistanceLbl0' in combolst:
+                        nwp['DistanceLbl0'] = d0
+                    if 'DistLbl1' in combolst:
+                        nwp['DistLbl1'] = d1 ##same as infinite - there have been none
+                    if 'RelRuncount' in combolst:
+                        nwp['RelRuncount'] = rel_c
+
+                    temp.append(nwp)
+
+                    ##update values for next one
+                    prevlbl = l
+                    if prevlbl == 0: 
+                        c0 += 1
+                        d0 = 0
+                        if d1 == 999: 
+                            d1 = 999
+                        else: 
+                            d1 +=1
+                    elif prevlbl ==1: 
+                        c1 += 1
+                        d1 = 0
+                        if d0 == 999: 
+                            d0 = 999
+                        else: 
+                            d0 += 1
+                    ds = ds +1
+
+                    if c1 == 0: 
+                        rel_c= 0
+                    else:
+                        rel_c = (c1/ds)
+                ##thread is done - add to new Xtest
+                X_test_nwest.append(temp)
+
+
+
+            y_pred_nw = crf.predict(X_test_nwest)
+            y_pred_exp = [int(i) for j in y_pred_nw for i in j]
+
+        else: 
+            y_pred_exp = [int(i) for j in y_pred_first for i in j]
+
+
+        y_test_exp= [int(i) for j in y_test for i in j]
+
+        f1_out = f1_score (y_true = y_test_exp, y_pred = y_pred_exp)         
+        recall_out = recall_score(y_true = y_test_exp, y_pred = y_pred_exp)
+        prec_out = precision_score (y_true = y_test_exp, y_pred = y_pred_exp)
     #         auc_out = roc_auc_score(y_true = y_test, y_pred= y_pred)
-            out['F1'].append(f1_out)
-            out['recall'].append(recall_out)
-            out['precision'].append(prec_out)
         
-        avg = np.mean(out['F1'])
         
-        return out, avg
+        return f1_out, recall_out, prec_out
     
     def forward_feature_selection(self, data,  basepath_probas, outpath, currentf1, da_acts = False): 
+        test_results = defaultdict(list)
         
         if da_acts == True: 
             origfeaturelst = ['prev_post_label', 'distance_score', 'prev_sim', 'RuncountNeg', 'RuncountPos', 'RelRuncount', 'DistanceLbl0', 'DistanceLbl1', 'thread_sim', 'da_acts', 'da_acts_prev']
         else: 
              origfeaturelst = ['prev_post_label', 'distance_score', 'prev_sim', 'RuncountNeg', 'RuncountPos', 'RelRuncount', 'DistanceLbl0', 'DistanceLbl1', 'thread_sim']
+        
+        for p, d, l in zip(crf_params, self.folddicts, ['fold1', 'fold2', 'fold3', 'fold4', 'fold5', 'fold6', 'fold7', 'fold8', 'fold9', 'fold10']):
+            featurelst = origfeaturelst
+            prevaddlst = []
+            current_F1 = currentf1
+            improv_f1 = []
+            improv_f1.append(currentf1)
+            quit = 0
+            round_num =1
+            foldname = l
+            while quit == 0 : 
+                round_dict = {}
+                res = []
+                for j in featurelst: 
+                    ##run CRF experiments
+    #                 print(j)
+                    if j == 'prev_post_label' or 'prev_post_label' in prevaddlst:
+                        p2 = True
+                    else: 
+                        p2 = False
 
-        featurelst = origfeaturelst
-        prevaddlst = []
-        current_F1 = currentf1
-        improv_f1 = []
-        improv_f1.append(currentf1)
-        quit = 0
-        round_num =1
+                    out, rec, prec = self.run_crf_preset_blended_doublerun(data,prevaddlst, addlst=j, predlbls = p2, crf_params=self.crf_params, basepath_probas = basepath_probas, p=p, d=d,l=l, final_test = False)            
+                    round_dict[j] = out
 
-        while quit == 0 : 
-            round_dict = {}
-            res = []
-            for j in featurelst: 
-                ##run CRF experiments
-#                 print(j)
-                if j == 'prev_post_label' or 'prev_post_label' in prevaddlst:
-                    p = True
+                    res.append(out)
+                ##save rounddict
+                savepath = outpath + 'round_dict' + str(round_num) + '_' + foldname
+                self.save_obj(round_dict, savepath)
+
+                ##get the best
+                bestix = res.index(np.max(res))
+                bestval = np.max(res)
+                
+                if bestval > current_F1: 
+#                 print('And the best feature is ... ')
+                    bestfeat = featurelst[bestix]   
+    #                 print(bestfeat)
+
+    #                 print(bestval)
+
+                    round_num = round_num + 1
+                    ##update feature list
+                    prevaddlst.append(bestfeat)
+                    featurelst = [i for i in featurelst if i != bestfeat] ##remove the feature from the list
+                    current_F1 = bestval
+                    improv_f1.append(bestval)
+                    self.save_obj(prevaddlst, outpath + 'features_added_'+ str(foldname))
+                    self.save_obj(current_F1, outpath + 'best_f1_'+ str(foldname))
+                    self.save_obj(improv_f1, outpath + 'steps_f1_'+ str(foldname))
+
                 else: 
-                    p = False
+                    print('Time to quit')
+                    quit = 1 ##quit if the best feature adds nothing.
 
-                out, avg = self.run_crf_preset_blended_doublerun(data,prevaddlst, addlst=j, predlbls = p, crf_params=self.crf_params, basepath_probas = basepath_probas)            
-                round_dict[j] = out
+            ##set the feature set
 
-                res.append(avg)
-            ##save rounddict
-            savepath = outpath + 'round_dict' + str(round_num)
-            self.save_obj(round_dict, savepath)
-
-            ##get the best
-            bestix = res.index(np.max(res))
-            bestval = np.max(res)
-            if bestval > current_F1: 
-                pass
+            if len(prevaddlst) > 1: 
+                f = prevaddlst[:-1]
             else: 
-#                 print('Time to quit')
-                quit = 1 ##quit if the best feature adds nothing.
+                f= []
+            try: 
 
-#             print('And the best feature is ... ')
-            bestfeat = featurelst[bestix]   
-#             print(bestfeat)
+                f2 = prevaddlst[-1]
+            except: 
+                f2 = None
+    #         print(prevaddlst)
 
-            round_num = round_num + 1
+            ##test on test set   
+            out_test, rec, prec = run_crf_preset_blended_doublerun(data,prevaddlst, addlst=j, predlbls = p2, crf_params=self.crf_params, basepath_probas = basepath_probas, p=p, d=d,l=l, final_test = True)            
+    #         print(out_test)
 
-            ##update feature list
-            prevaddlst.append(bestfeat)
-            featurelst = [i for i in featurelst if i != bestfeat] ##remove the feature from the list
-            current_F1 = bestval
-            improv_f1.append(bestval)
-            self.save_obj(prevaddlst, outpath + 'features_added')
-            self.save_obj(current_F1, outpath + 'best_f1')
-            self.save_obj(improv_f1, outpath + 'steps_f1')
-        
-            ##return some outcome to print
-        print('The new best F1 score is: ')
-        print(current_F1)
-        
-        print('The added features to attain this were: ')
-        print(prevaddlst)
+            test_results['F1'].append(out_test)
+            test_results['Recall'].append(rec)
+            test_results['Precision'].append(prec)
+            ##also save this 
+
+            self.save_obj(test_results,  outpath + 'test_results')
+
+                ##return some outcome to print
+            print('The resulting F1 from adding features is: ')
+            print(out_test)
+
+            print('The added features to attain this were: ')
+            print(prevaddlst)
         
 #         return prevaddlst, current_F1
         
